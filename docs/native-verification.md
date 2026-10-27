@@ -1,5 +1,17 @@
 # Native verification — 27 October 2026
 
+## Web interface parity update
+
+The native interface now follows the original web layout and purple/mint palette: fixed navigation and drive cards, scan/exclusion controls, four metrics, a seven-segment donut plus remainder, breadcrumbs, sortable results and 200-row pages. Navigation and legend labels are left aligned. CSV export is an explicit save action; nothing persists automatically. Skipped entries retain actionable paths and reasons, with bounded samples.
+
+- `cargo test --locked --release`: 13 passed, one opt-in performance probe. The probe also passed separately. `cargo fmt --check`, Clippy with warnings denied and all five privacy-guard tests passed.
+- Synthetic million-entry index: 26.019 ms; retrieving its final 200-row page: 0.006 ms. Folder queries traverse child links; page changes reuse a compact index. Superseded sorts cancel between bounded chunks and during merging.
+- Synthetic 20,000-file scan, three warm repetitions: medians 13.352 ms (one worker), 5.142 ms (four), 4.497 ms (eight). Totals remained exact.
+- Windows drive enumeration was exercised independently: four local drives returned valid capacity data. Normal startup enables drive refresh; `--demo` uses synthetic drives and now has a clearly labeled window title.
+- Original HTML/CSS/JS and the native preview were compared using synthetic data. The user stopped computer control before the final alignment/interaction recheck; that final visual check remains unverified. No real scan was captured or committed.
+
+The earlier measurements and CI results below describe the initial native delivery, not this update.
+
 ## Windows
 
 - `cargo test --locked`: 9 passed; 1 performance probe intentionally excluded from the default suite.

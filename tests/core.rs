@@ -180,12 +180,35 @@ fn million_entry_query_probe() {
         s.nodes.push(Node {
             name: format!("synthetic-{id:07}.bin").into(),
             bytes: id as u64,
+            files: u64::from(id != 0),
             parent: if id == 0 { NONE } else { 0 },
             first_child: NONE,
             next_sibling: NONE,
             is_dir: id == 0,
         });
     }
+    let started = Instant::now();
+    let index = diskpie::query::query_index(
+        &s,
+        &View::Largest,
+        diskpie::query::Sort::Size,
+        true,
+        &AtomicU64::new(0),
+        0,
+    )
+    .unwrap();
+    println!(
+        "full synthetic index: {:.3} ms; {} matches",
+        started.elapsed().as_secs_f64() * 1000.,
+        index.total
+    );
+    let started = Instant::now();
+    let last = index.page(999800, 200);
+    assert_eq!(last.ids.len(), 200);
+    println!(
+        "cached final page: {:.3} ms",
+        started.elapsed().as_secs_f64() * 1000.
+    );
     for view in [View::Largest, View::Search("999".into())] {
         let started = Instant::now();
         let result = query(&s, &view, 10_000, &AtomicU64::new(0), 0).unwrap();
@@ -208,6 +231,9 @@ fn symlink_cycle_is_skipped() {
     std::os::unix::fs::symlink(dir.path(), dir.path().join("loop")).unwrap();
     let s = scan(dir.path(), 2, &AtomicBool::new(false), &Progress::default()).unwrap();
     assert_eq!((s.nodes[0].bytes, s.skipped), (35, 1));
+    assert_eq!(s.issues.len(), 1);
+    assert!(s.issues[0].skipped);
+    assert_eq!(s.issues[0].path.file_name().unwrap(), "loop");
 }
 
 #[cfg(windows)]
@@ -226,4 +252,7 @@ fn junction_cycle_is_skipped() {
     fs::remove_dir(&junction).unwrap();
     let s = result.unwrap();
     assert_eq!((s.nodes[0].bytes, s.skipped), (35, 1));
+    assert_eq!(s.issues.len(), 1);
+    assert!(s.issues[0].skipped);
+    assert_eq!(s.issues[0].path.file_name().unwrap(), "loop");
 }

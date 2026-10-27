@@ -1,5 +1,8 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 mod app;
+mod demo;
+mod platform;
+mod theme;
 use std::{path::PathBuf, sync::atomic::AtomicBool};
 
 fn main() -> eframe::Result {
@@ -38,13 +41,17 @@ fn main() -> eframe::Result {
     let demo = args.first().is_some_and(|s| s == "--demo");
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
-            .with_inner_size([1180.0, 800.0])
+            .with_inner_size([1280.0, 900.0])
             .with_min_inner_size([850.0, 580.0]),
         renderer: eframe::Renderer::Glow,
         ..Default::default()
     };
     eframe::run_native(
-        "DiskPie",
+        if demo {
+            "DiskPie — synthetic preview"
+        } else {
+            "DiskPie"
+        },
         options,
         Box::new(move |cc| Ok(Box::new(app::DiskPieApp::new(cc, root, demo)))),
     )

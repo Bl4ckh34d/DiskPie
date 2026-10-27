@@ -23,8 +23,8 @@ Clipboard and file-manager actions happen only when selected. Legacy web reports
 - Bounded background directory workers (1–16, default 4); try 1–2 for HDD/network storage and 4–8 for SSDs.
 - Flat in-memory tree, filenames stored once, iterative subtree totals. No database or JSON transport in the scan path.
 - Background search and ranking with cancellation of stale queries. Tables draw visible rows only.
-- At most 10,000 rows per view; the total matching count is shown. Search narrows large folders.
-- The donut renders at most 24 entries plus an exact remainder; no per-file geometry for a whole drive.
+- Pages of 200 rows, with name/size/file-count sorting across all matches. Compact ID indices are sorted on the background worker, reused between pages, and cancelled in bounded batches when superseded.
+- The donut renders at most seven entries plus an exact remainder; no per-file geometry for a whole drive.
 - Progress refreshes at 10 Hz. Idle windows do not continuously repaint.
 
 The portable scanner uses ordinary directory enumeration without elevated raw-volume access.
@@ -40,7 +40,7 @@ An explicitly selected linked root is resolved; links inside it are not traverse
 Link skipping is best-effort on a changing filesystem: another process can replace a directory
 between checking metadata and opening it. Path-based scanning is not a security sandbox.
 
-Read errors produce a partial result and visible counters (up to 128 error samples).
+Read errors produce a partial result and visible counters (up to 128 error and 128 skipped-entry samples).
 Files may change during a scan. Every rescan reads metadata afresh. A blocked filesystem call
 can delay cancellation; the UI remains responsive. Traversal does not need administrator rights.
 
@@ -74,8 +74,7 @@ DiskPie --benchmark <directory> [workers]
 
 Demo uses synthetic in-memory data. Benchmark mode is explicit and prints aggregate counts/timing
 only, never filenames or paths. Windows GUI executables should be launched from a parent process
-that captures stdout when benchmarking. The old web app's persistent snapshots and CSV exports are
-not part of this version.
+that captures stdout when benchmarking. Persistent snapshots are not imported or saved. **Export this page** writes only the visible page to an explicitly selected CSV file. Exclusions accept one existing full folder path per line. Windows drive cards show local fixed/removable drives; Linux/macOS currently offer the root location and folder picker.
 
 ## Repository privacy
 

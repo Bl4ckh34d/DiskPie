@@ -8,6 +8,7 @@ pub const NONE: NodeId = u32::MAX;
 pub struct Node {
     pub name: OsString,
     pub bytes: u64,
+    pub files: u64,
     pub parent: NodeId,
     pub first_child: NodeId,
     pub next_sibling: NodeId,
@@ -22,7 +23,7 @@ pub struct Snapshot {
     pub folders: u64,
     pub errors: u64,
     pub skipped: u64,
-    pub issues: Vec<String>,
+    pub issues: Vec<ScanIssue>,
     pub types: Vec<FileType>,
     pub seconds: f64,
 }
@@ -79,4 +80,11 @@ pub fn size_label(bytes: u64) -> String {
     } else {
         format!("{value:.1} {}", UNITS[unit])
     }
+}
+
+#[derive(Debug)]
+pub struct ScanIssue {
+    pub path: PathBuf,
+    pub reason: String,
+    pub skipped: bool,
 }

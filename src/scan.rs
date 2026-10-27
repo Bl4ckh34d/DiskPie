@@ -1,4 +1,4 @@
-use crate::model::{FileType, NONE, Node, NodeId, Snapshot, extension};
+use crate::model::{FileType, NONE, Node, NodeId, ScanIssue, Snapshot, extension};
 use std::{
     collections::{HashMap, VecDeque},
     ffi::OsString,
@@ -29,7 +29,7 @@ struct Entry {
 enum Event {
     Batch(NodeId, Vec<Entry>),
     Done,
-    Issue(String),
+    Issue(ScanIssue),
 }
 type Jobs = (Mutex<VecDeque<(PathBuf, NodeId)>>, Condvar);
 
@@ -51,6 +51,7 @@ fn worker(
     cancel: &AtomicBool,
     progress: &Progress,
     tx: mpsc::SyncSender<Event>,
+    excludes: &[PathBuf],
 ) {
     loop {
         let job = {
@@ -74,14 +75,28 @@ fn worker(
         let issue = |path: &Path, error: std::io::Error| {
             let n = progress.errors.fetch_add(1, Ordering::Relaxed);
             if n < 128 {
-                let _ = tx.send(Event::Issue(format!("{}: {error}", path.display())));
+                let _ = tx.send(Event::Issue(ScanIssue {
+                    path: path.to_path_buf(),
+                    reason: error.to_string(),
+                    skipped: false,
+                }));
+            }
+        };
+        let skipped = |path: &Path| {
+            let n = progress.skipped.fetch_add(1, Ordering::Relaxed);
+            if n < 128 {
+                let _ = tx.send(Event::Issue(ScanIssue {
+                    path: path.to_path_buf(),
+                    reason: "Link, reparse point or special file; not followed".into(),
+                    skipped: true,
+                }));
             }
         };
         // Jobs can wait in the queue: recheck for a replaced link before opening.
         // Path-based enumeration is still not an atomic filesystem sandbox.
         match fs::symlink_metadata(&path) {
             Ok(metadata) if is_link(&metadata) => {
-                progress.skipped.fetch_add(1, Ordering::Relaxed);
+                skipped(&path);
                 if tx.send(Event::Done).is_err() {
                     return;
                 }
@@ -111,6 +126,12 @@ fn worker(
                             continue;
                         }
                     };
+                    if excludes
+                        .iter()
+                        .any(|excluded| entry.path().starts_with(excluded))
+                    {
+                        continue;
+                    }
                     let metadata = match entry.metadata() {
                         Ok(m) => m,
                         Err(e) => {
@@ -119,7 +140,7 @@ fn worker(
                         }
                     };
                     if is_link(&metadata) || (!metadata.is_file() && !metadata.is_dir()) {
-                        progress.skipped.fetch_add(1, Ordering::Relaxed);
+                        skipped(&entry.path());
                         continue;
                     }
                     let is_dir = metadata.is_dir();
@@ -162,11 +183,28 @@ pub fn scan(
     cancel: &AtomicBool,
     progress: &Progress,
 ) -> Result<Snapshot, String> {
+    scan_excluding(root, workers, cancel, progress, &[])
+}
+
+pub fn scan_excluding(
+    root: &Path,
+    workers: usize,
+    cancel: &AtomicBool,
+    progress: &Progress,
+    excludes: &[PathBuf],
+) -> Result<Snapshot, String> {
+    let excludes: Vec<_> = excludes
+        .iter()
+        .map(|p| fs::canonicalize(p).map_err(|e| format!("Cannot open exclusion: {e}")))
+        .collect::<Result<_, _>>()?;
     if cancel.load(Ordering::Relaxed) {
         return Err("Scan cancelled".into());
     }
     let started = Instant::now();
     let root = fs::canonicalize(root).map_err(|e| format!("Cannot open location: {e}"))?;
+    if excludes.iter().any(|p| root.starts_with(p)) {
+        return Err("Scan location is excluded".into());
+    }
     if !root.is_dir() {
         return Err("Choose a directory or drive".into());
     }
@@ -177,6 +215,7 @@ pub fn scan(
     snapshot.nodes.push(Node {
         name: OsString::new(),
         bytes: 0,
+        files: 0,
         parent: NONE,
         first_child: NONE,
         next_sibling: NONE,
@@ -190,7 +229,8 @@ pub fn scan(
         for _ in 0..workers.clamp(1, 16) {
             let sender = tx.clone();
             let (jobs_ref, quit_ref) = (&jobs, &quit);
-            scope.spawn(move || worker(jobs_ref, quit_ref, cancel, progress, sender));
+            let excludes = &excludes;
+            scope.spawn(move || worker(jobs_ref, quit_ref, cancel, progress, sender, excludes));
         }
         drop(tx);
         let result = (|| {
@@ -215,6 +255,7 @@ pub fn scan(
                             snapshot.nodes.push(Node {
                                 name: entry.name,
                                 bytes: entry.bytes,
+                                files: u64::from(!entry.is_dir),
                                 parent,
                                 first_child: NONE,
                                 next_sibling,
@@ -247,7 +288,7 @@ pub fn scan(
             return Err("Scan cancelled".into());
         }
         let node = &snapshot.nodes[id];
-        let (parent, bytes) = (node.parent, node.bytes);
+        let (parent, bytes, files) = (node.parent, node.bytes, node.files);
         if node.is_dir {
             snapshot.folders += 1;
         } else {
@@ -259,6 +300,7 @@ pub fn scan(
         }
         if parent != NONE {
             snapshot.nodes[parent as usize].bytes += bytes;
+            snapshot.nodes[parent as usize].files += files;
         }
     }
     snapshot.types = types

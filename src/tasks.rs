@@ -1,7 +1,7 @@
 use crate::model::Snapshot;
 use crate::{
-    query::{QueryResult, View, query},
-    scan::{Progress, scan},
+    query::{QueryResult, Sort, View, query_index},
+    scan::{Progress, scan_excluding},
 };
 use std::{
     path::PathBuf,
@@ -37,13 +37,17 @@ pub struct ScanTask {
 }
 impl ScanTask {
     pub fn start(root: PathBuf, workers: usize) -> Self {
+        Self::start_excluding(root, workers, Vec::new())
+    }
+    pub fn start_excluding(root: PathBuf, workers: usize, excludes: Vec<PathBuf>) -> Self {
         let cancel = Arc::new(AtomicBool::new(false));
         let progress = Arc::new(Progress::default());
         let (tx, receiver) = mpsc::channel();
         let (c, p) = (cancel.clone(), progress.clone());
         std::thread::spawn(move || {
-            let result = std::panic::catch_unwind(|| scan(&root, workers, &c, &p))
-                .unwrap_or_else(|_| Err("Scanner stopped unexpectedly".into()));
+            let result =
+                std::panic::catch_unwind(|| scan_excluding(&root, workers, &c, &p, &excludes))
+                    .unwrap_or_else(|_| Err("Scanner stopped unexpectedly".into()));
             let _ = tx.send(result);
         });
         Self {
@@ -64,6 +68,9 @@ struct Request {
     snapshot: Arc<Snapshot>,
     view: View,
     generation: u64,
+    sort: Sort,
+    descending: bool,
+    offset: usize,
 }
 #[derive(Default)]
 struct Mailbox {
@@ -83,6 +90,7 @@ impl Default for QueryTask {
         let (tx, receiver) = mpsc::sync_channel(1);
         let (m, g) = (mailbox.clone(), generation.clone());
         std::thread::spawn(move || {
+            let mut cache: Option<(Arc<Snapshot>, View, Sort, bool, QueryResult)> = None;
             loop {
                 let request = {
                     let mut state = m.0.lock().unwrap();
@@ -94,15 +102,40 @@ impl Default for QueryTask {
                     }
                     state.next.take().unwrap()
                 };
-                if let Some(result) = query(
-                    &request.snapshot,
-                    &request.view,
-                    10_000,
-                    &g,
-                    request.generation,
-                ) && tx.send((request.generation, result)).is_err()
+                let cached = cache
+                    .as_ref()
+                    .is_some_and(|(snapshot, view, sort, descending, _)| {
+                        Arc::ptr_eq(snapshot, &request.snapshot)
+                            && *view == request.view
+                            && *sort == request.sort
+                            && *descending == request.descending
+                    });
+                if !cached {
+                    cache = None;
+                    if let Some(index) = query_index(
+                        &request.snapshot,
+                        &request.view,
+                        request.sort,
+                        request.descending,
+                        &g,
+                        request.generation,
+                    ) {
+                        cache = Some((
+                            request.snapshot.clone(),
+                            request.view.clone(),
+                            request.sort,
+                            request.descending,
+                            index,
+                        ));
+                    }
+                }
+                if g.load(Ordering::Relaxed) == request.generation
+                    && let Some((_, _, _, _, index)) = &cache
                 {
-                    return;
+                    let result = index.page(request.offset, 200);
+                    if tx.send((request.generation, result)).is_err() {
+                        return;
+                    }
                 }
             }
         });
@@ -116,11 +149,24 @@ impl Default for QueryTask {
 }
 impl QueryTask {
     pub fn request(&mut self, snapshot: Arc<Snapshot>, view: View) {
+        self.request_page(snapshot, view, Sort::Size, true, 0);
+    }
+    pub fn request_page(
+        &mut self,
+        snapshot: Arc<Snapshot>,
+        view: View,
+        sort: Sort,
+        descending: bool,
+        offset: usize,
+    ) {
         self.current = self.generation.fetch_add(1, Ordering::Relaxed) + 1;
         self.mailbox.0.lock().unwrap().next = Some(Request {
             snapshot,
             view,
             generation: self.current,
+            sort,
+            descending,
+            offset,
         });
         self.mailbox.1.notify_one();
     }
