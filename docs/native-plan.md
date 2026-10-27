@@ -8,4 +8,4 @@ Execution: inline in the existing directory; no copy of private legacy data.
 2. Completed: failing synthetic scanner/query tests, then flat-tree scanning and bounded background queries. Tests now pass.
 3. Completed: scan controls, completion/cancellation, navigation, virtualized tables and bounded donut geometry. Model/chart tests and synthetic native GUI inspection passed.
 4. Completed: aggregate-only benchmark mode, portable packaging, dependency notices, README and Windows/Linux/macOS CI. Python/Rust synthetic comparison recorded in native-verification.md.
-5. Local release tests, clippy, formatting, privacy checks and GUI smoke passed. Finish with exact staged inventory review, source-only push, CI checks, disposal of build/test intermediates and Obsidian capture.
+5. Completed: local release tests, clippy, formatting, privacy checks and GUI smoke passed. Source-only inventory reviewed and pushed. All four CI build/test/package jobs passed. Disposable build output (1.2 GiB) and installer removed; portable output retained. Results captured in Obsidian.

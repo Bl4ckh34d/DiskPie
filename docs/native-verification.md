@@ -24,6 +24,8 @@ These are warm small-fixture measurements, not a whole-drive benchmark or an all
 
 Independent read-only review found no critical issue. Queued directories are now rechecked for replacement links, but path-based enumeration cannot prevent every concurrent filesystem mutation; this limitation is explicit in the README. Pending directory paths and filename storage scale with the discovered tree. Aborted/failed scans preserve the previous completed result; memory may temporarily contain both.
 
-Windows is locally built and exercised. Linux and macOS have native CI build/test/package jobs; those are separate from local Windows verification. macOS packages are unsigned/unnotarized. Linux archives require compatible system libraries.
+Windows is locally built and exercised. [CI run 40489772220](https://github.com/Bl4ckh34d/DiskPie/actions/runs/40489772220) passed all four native build/test/package jobs at source commit `bd8f148`: Windows x64, Linux x64, macOS ARM64 and macOS x64. All four archives were uploaded. Linux/macOS GUI behavior has not been manually exercised on hardware. macOS packages are unsigned/unnotarized. Linux archives require compatible system libraries. The initial macOS packaging failure was an omitted upstream license file in `dispatch 0.2.0`; its declared MIT grant and author attribution are now included and the rerun passed.
 
 The public repository contains only an explicit source allowlist. Legacy reports, databases, logs, local paths, scan exports and build artifacts were never staged. All smoke data is synthetic.
+
+After verification, 1.2 GiB of disposable build output and the temporary toolchain installer were removed. The portable distribution and required development toolchain remain available. Normal GUI startup was verified to perform no automatic scan.

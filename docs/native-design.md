@@ -20,7 +20,7 @@ Queued directories are rechecked for links before enumeration. Since checking an
 
 ## Privacy and storage
 
-No automatic scan on launch, scan database, remembered root, log, crash upload or telemetry. Only explicit clipboard/reveal actions expose selected paths to the local OS. Tests generate disposable synthetic data outside source control. Packaging copies only the executable and public README. The repository uses a source allowlist, a staged-content privacy check, and a CI repository check. These are defenses in depth; manual staged diff review remains required.
+No automatic scan on launch, scan database, remembered root, log, crash upload or telemetry. Only explicit clipboard/reveal actions expose selected paths to the local OS. Tests generate disposable synthetic data outside source control. Packaging copies only the executable, public README and upstream dependency license notices. The repository uses a source allowlist, a staged-content privacy check, and a CI repository check. These are defenses in depth; manual staged diff review remains required.
 
 ## Validation
 
