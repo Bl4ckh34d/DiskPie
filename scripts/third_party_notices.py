@@ -68,6 +68,20 @@ for package in sorted(metadata['packages'], key=lambda p: (p['name'], p['version
                 cache.write_bytes(content)
             sections.append(cache.read_text(encoding='utf-8'))
             found = True
+        # dispatch 0.2.0 declares MIT in its verified registry manifest but ships
+        # no license file or copyright notice. Preserve its author attribution
+        # and include the standard grant; do not invent copyright years.
+        if not files and not found and package['name'] == 'dispatch' and package['version'] == '0.2.0' and package.get('license') == 'MIT':
+            cache = Path('target/license-cache/MIT.txt')
+            if not cache.is_file():
+                with urllib.request.urlopen('https://raw.githubusercontent.com/spdx/license-list-data/31ba1a50e5397e00a304dbadc76531740e89ee48/text/MIT.txt', timeout=20) as response:
+                    content = response.read(100_000)
+                cache.parent.mkdir(parents=True, exist_ok=True)
+                cache.write_bytes(content)
+            sections.append('Upstream package authors: ' + ', '.join(package.get('authors', [])))
+            text = cache.read_text(encoding='utf-8')
+            sections.append(text[text.index('Permission is hereby granted'):])
+            found = True
         if not files and not found:
             missing.append(package['name'])
     for file in sorted(files):
