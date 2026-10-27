@@ -12,6 +12,12 @@ The native interface now follows the original web layout and purple/mint palette
 
 The earlier measurements and CI results below describe the initial native delivery, not this update.
 
+## Drive selection correction
+
+Drive selection now switches the entire result view to that location's latest completed scan in this session. A location without a completed scan shows an explicit empty state. Failed or cancelled rescans preserve that location's previous result; a scan finishing after the user selects another drive is cached without stealing the selection. Drive cards show whether a scan is available. Snapshots remain in RAM only and cannot be carried over from a previously running executable when upgrading.
+
+`cargo test --locked --release` passed 17 tests on Windows, with one optional performance probe excluded. New regressions cover switching between two scans, unscanned locations, late completion, cancelled/failed replacement, equivalent Windows drive spellings, and distinct case-sensitive Windows roots. Clippy and formatting checks passed. The preceding layout commit `531cf20` passed all four build/test/package jobs in [CI run 40510070651](https://github.com/Bl4ckh34d/DiskPie/actions/runs/40510070651); the subsequent session-cache correction is locally verified on Windows. Final GUI rechecking remains subject to the computer-control interruption noted above.
+
 ## Windows
 
 - `cargo test --locked`: 9 passed; 1 performance probe intentionally excluded from the default suite.

@@ -30,6 +30,7 @@ pub fn publish(
 }
 
 pub struct ScanTask {
+    pub root: PathBuf,
     pub cancel: Arc<AtomicBool>,
     pub progress: Arc<Progress>,
     pub receiver: mpsc::Receiver<Result<Snapshot, String>>,
@@ -40,6 +41,7 @@ impl ScanTask {
         Self::start_excluding(root, workers, Vec::new())
     }
     pub fn start_excluding(root: PathBuf, workers: usize, excludes: Vec<PathBuf>) -> Self {
+        let requested_root = root.clone();
         let cancel = Arc::new(AtomicBool::new(false));
         let progress = Arc::new(Progress::default());
         let (tx, receiver) = mpsc::channel();
@@ -51,6 +53,7 @@ impl ScanTask {
             let _ = tx.send(result);
         });
         Self {
+            root: requested_root,
             cancel,
             progress,
             receiver,
@@ -148,6 +151,10 @@ impl Default for QueryTask {
     }
 }
 impl QueryTask {
+    pub fn invalidate(&mut self) {
+        self.current = self.generation.fetch_add(1, Ordering::Relaxed) + 1;
+        self.mailbox.0.lock().unwrap().next = None;
+    }
     pub fn request(&mut self, snapshot: Arc<Snapshot>, view: View) {
         self.request_page(snapshot, view, Sort::Size, true, 0);
     }

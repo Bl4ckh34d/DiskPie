@@ -9,7 +9,8 @@ use diskpie::{
     export::csv_field,
     model::{NONE, NodeId, Snapshot, size_label},
     query::{QueryResult, Sort, View},
-    tasks::{QueryTask, ScanTask, publish},
+    session::Session,
+    tasks::{QueryTask, ScanTask},
 };
 
 use eframe::egui::{self, Align2, Color32, FontId, RichText, Stroke, Vec2};
@@ -28,6 +29,8 @@ pub struct DiskPieApp {
     workers: usize,
     scan: Option<ScanTask>,
     snapshot: Option<Arc<Snapshot>>,
+    session: Session,
+    selected_location: String,
     query: QueryTask,
     result: QueryResult,
     view: View,
@@ -68,6 +71,8 @@ impl DiskPieApp {
             workers: 4,
             scan: None,
             snapshot: None,
+            session: Session::default(),
+            selected_location: String::new(),
             query: QueryTask::default(),
             result: QueryResult::default(),
             view: View::Folder(0),
@@ -92,7 +97,16 @@ impl DiskPieApp {
         if demo {
             app.location = "Demo".into();
 
-            app.snapshot = Some(Arc::new(demo_snapshot()));
+            app.session.select(std::path::Path::new("Demo"));
+            app.selected_location = "Demo".into();
+            app.session
+                .finish(
+                    std::path::Path::new("Demo"),
+                    Ok(demo_snapshot()),
+                    &std::sync::atomic::AtomicBool::new(false),
+                )
+                .unwrap();
+            app.snapshot = app.session.current();
 
             app.completed = "Synthetic preview".into();
 
@@ -111,6 +125,9 @@ impl DiskPieApp {
             }
         }
 
+        if !demo && app.selected_location.is_empty() {
+            app.select_location(app.location.clone());
+        }
         app
     }
 
@@ -128,12 +145,41 @@ impl DiskPieApp {
         });
     }
 
+    fn select_location(&mut self, location: String) {
+        self.location = location.clone();
+        self.selected_location = location.clone();
+        self.session.select(std::path::Path::new(&location));
+        self.query.invalidate();
+        let previous = self.snapshot.take();
+        self.snapshot = self.session.current();
+        if previous.is_some() {
+            std::thread::spawn(move || drop(previous));
+        }
+        self.folder = 0;
+        self.view = View::Folder(0);
+        self.types = false;
+        self.issues = false;
+        self.page = 0;
+        self.result = QueryResult::default();
+        self.busy = false;
+        self.search.clear();
+        self.search_changed = None;
+        self.message.clear();
+        self.completed = if self.snapshot.is_some() {
+            "Completed this session".into()
+        } else {
+            String::new()
+        };
+        self.request();
+    }
+
     fn start_scan(&mut self) {
         if self.scan.is_some() || self.location.trim().is_empty() {
             return;
         }
 
         self.demo = false;
+        self.select_location(self.location.trim().to_string());
 
         let excludes = self
             .excludes
@@ -200,27 +246,28 @@ impl DiskPieApp {
         if let Some(task) = &self.scan {
             match task.receiver.try_recv() {
                 Ok(result) => {
-                    match publish(&mut self.snapshot, result, &task.cancel) {
+                    let root = task.root.clone();
+                    match self.session.finish(&root, result, &task.cancel) {
                         Ok(()) => {
-                            self.completed = "Completed this session".into();
-
-                            self.message.clear();
-
-                            self.search.clear();
-
-                            self.navigate(View::Folder(0));
+                            if self.session.selected(&root) {
+                                self.select_location(self.selected_location.clone());
+                            } else {
+                                self.message =
+                                    "Scan completed. Select its drive to view the results.".into();
+                            }
                         }
-
-                        Err(e) => self.message = e,
+                        Err(e) => self.message = format!("{}: {e}", root.display()),
                     }
 
                     self.scan = None;
                 }
 
                 Err(mpsc::TryRecvError::Disconnected) => {
+                    let root = task.root.clone();
                     self.scan = None;
 
-                    self.message = "Scan worker stopped; previous results kept".into();
+                    self.message =
+                        format!("Scan of {} stopped; previous results kept", root.display());
                 }
 
                 Err(_) => {}
@@ -431,7 +478,7 @@ impl DiskPieApp {
             .max_height((ui.available_height() - 125.).max(60.))
             .show(ui, |ui| {
                 for d in drives {
-                    let chosen = self.location == d.path;
+                    let chosen = self.session.selected(std::path::Path::new(&d.path));
 
                     let f = egui::Frame::new()
                         .fill(if chosen {
@@ -470,6 +517,14 @@ impl DiskPieApp {
                                 );
 
                                 muted(ui, format!("{} available", size_label(d.free)));
+                                muted(
+                                    ui,
+                                    if self.session.has_scan(std::path::Path::new(&d.path)) {
+                                        "Scan available"
+                                    } else {
+                                        "Not scanned yet"
+                                    },
+                                );
                             }
                         })
                         .response;
@@ -478,7 +533,7 @@ impl DiskPieApp {
                         .interact(r.rect, ui.id().with(&d.path), egui::Sense::click())
                         .clicked()
                     {
-                        self.location = d.path;
+                        self.select_location(d.path);
                     }
 
                     ui.add_space(6.);
@@ -628,6 +683,15 @@ impl DiskPieApp {
                     ),
                 );
 
+                ui.add(
+                    egui::Label::new(
+                        RichText::new(t.root.display().to_string())
+                            .monospace()
+                            .size(11.)
+                            .color(MUTED),
+                    )
+                    .truncate(),
+                );
                 ui.add(
                     egui::ProgressBar::new(0.5)
                         .animate(true)
@@ -1026,7 +1090,7 @@ impl DiskPieApp {
                 });
             });
             let Some(s)=&snapshot else {
-                ui.vertical_centered(|ui| {ui.add_space(48.);ui.label(RichText::new("◔ A clearer picture of your disk").size(20.));muted(ui,"Choose a drive on the left or enter a folder above to start scanning.");ui.add_space(50.);});
+                ui.vertical_centered(|ui| {ui.add_space(48.);ui.label(RichText::new("◔ Not scanned yet").size(20.));muted(ui,format!("{} has not been scanned in this session. Select Scan location to begin.",self.selected_location));ui.add_space(50.);});
                 return;
             };
             let widths = { let w=(ui.available_width()-100.).max(300.); [w*0.48,w*0.15,w*0.12,w*0.16,w*0.09] };
@@ -1160,10 +1224,7 @@ impl eframe::App for DiskPieApp {
                                 self.snapshot
                                     .as_ref()
                                     .map(|s| s.root.display().to_string())
-                                    .unwrap_or(
-                                        "Find what takes up space. Start with a drive or folder."
-                                            .into(),
-                                    ),
+                                    .unwrap_or_else(||self.selected_location.clone()),
                             );
 
                         }

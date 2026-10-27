@@ -12,7 +12,8 @@ Python, browser, local server, or installed Rust runtime is required. The app is
 2. Navigate through the donut chart, folder names or breadcrumbs.
 3. Switch to **Largest files**, **File types** or literal name search.
 4. **Copy** copies a full path; **Show** reveals an entry in the system file manager.
-5. **Stop scan** preserves the previous completed result. Closing the app discards results.
+5. Select a drive card to restore its latest completed scan. Unscanned drives show an empty state; **Scan location** starts their scan.
+6. **Stop scan** preserves the previous completed result for that location. Completed scans are kept per location in RAM for this session; closing the app discards them.
 
 The scanner only reads metadata. DiskPie never deletes files. It does not automatically scan,
 save inventories, remember locations, write logs, upload data, or start a network listener.
@@ -29,7 +30,7 @@ Clipboard and file-manager actions happen only when selected. Legacy web reports
 
 The portable scanner uses ordinary directory enumeration without elevated raw-volume access.
 It does not yet use an NTFS MFT/USN fast path. Performance depends on storage and filesystem caches.
-Memory scales with entry count; a new scan temporarily coexists with the previous result.
+Memory scales with all entries retained across scanned locations; a rescan temporarily coexists with that location's previous result.
 
 ## Accuracy
 
