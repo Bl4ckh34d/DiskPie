@@ -1,6 +1,7 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 mod app;
 mod demo;
+mod icon;
 mod platform;
 mod theme;
 use std::{path::PathBuf, sync::atomic::AtomicBool};
@@ -41,6 +42,11 @@ fn main() -> eframe::Result {
     let demo = args.first().is_some_and(|s| s == "--demo");
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
+            .with_icon(eframe::egui::IconData {
+                rgba: icon::rgba(64),
+                width: 64,
+                height: 64,
+            })
             .with_inner_size([1280.0, 900.0])
             .with_min_inner_size([850.0, 580.0]),
         renderer: eframe::Renderer::Glow,

@@ -24,6 +24,7 @@ use std::{
 const PAGE: usize = 200;
 
 pub struct DiskPieApp {
+    logo: egui::TextureHandle,
     location: String,
     excludes: String,
     workers: usize,
@@ -56,7 +57,13 @@ impl DiskPieApp {
     pub fn new(cc: &eframe::CreationContext<'_>, root: Option<PathBuf>, demo: bool) -> Self {
         apply(&cc.egui_ctx);
 
+        let logo = cc.egui_ctx.load_texture(
+            "diskpie-logo",
+            egui::ColorImage::from_rgba_unmultiplied([128, 128], &crate::icon::rgba(128)),
+            egui::TextureOptions::LINEAR,
+        );
         let mut app = Self {
+            logo,
             location: root
                 .as_ref()
                 .map(|p| p.display().to_string())
@@ -354,24 +361,7 @@ impl DiskPieApp {
         ui.add_space(12.);
 
         ui.horizontal(|ui| {
-            let (r, _) = ui.allocate_exact_size(Vec2::splat(31.), egui::Sense::hover());
-
-            let p = ui.painter();
-
-            p.circle_filled(r.center(), 15., PURPLE);
-
-            let c = r.center();
-
-            p.add(egui::Shape::convex_polygon(
-                vec![
-                    c,
-                    c + Vec2::new(0., -15.),
-                    c + Vec2::new(10.6, -10.6),
-                    c + Vec2::new(15., 0.),
-                ],
-                MINT,
-                Stroke::NONE,
-            ));
+            ui.add(egui::Image::new(&self.logo).fit_to_exact_size(Vec2::splat(31.)));
 
             ui.label(
                 RichText::new("DiskPie")

@@ -4,7 +4,7 @@ import re
 import subprocess
 import sys
 
-EXACT = {'.gitignore', 'AGENTS.md', 'Cargo.toml', 'Cargo.lock',
+EXACT = {'.gitignore', 'AGENTS.md', 'Cargo.toml', 'Cargo.lock', 'build.rs',
          'rust-toolchain.toml', 'README.md', 'DiskPie.cmd', '.cargo/config.toml',
          '.github/workflows/build.yml', 'docs/native-design.md',
          'docs/native-plan.md', 'docs/native-verification.md'}

@@ -1,5 +1,9 @@
 # Native verification — 27 October 2026
 
+## Application icon
+
+The sidebar, native window and Windows executable share the purple/mint mark defined in `src/icon.rs`. `build.rs` generates an ICO in Cargo's output directory and embeds 16, 24, 32, 48, 64, 128 and 256 pixel variants as Windows resources. No binary asset or external image file is required in Git or the portable package. The packaged EXE's seven resource payloads were compared byte-for-byte with the generated ICO; the Explorer-associated icon was extracted and visually inspected. The viewport uses the same renderer for its runtime icon.
+
 ## Web interface parity update
 
 The native interface now follows the original web layout and purple/mint palette: fixed navigation and drive cards, scan/exclusion controls, four metrics, a seven-segment donut plus remainder, breadcrumbs, sortable results and 200-row pages. Navigation and legend labels are left aligned. CSV export is an explicit save action; nothing persists automatically. Skipped entries retain actionable paths and reasons, with bounded samples.
