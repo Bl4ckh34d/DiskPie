@@ -1,0 +1,28 @@
+[package]
+name = "diskpie"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+description = "Private, native disk usage explorer"
+publish = false
+
+[dependencies]
+eframe = { version = "0.33", default-features = false, features = ["default_fonts", "glow", "x11", "wayland"] }
+rfd = { version = "0.15", default-features = false, features = ["xdg-portal", "async-std"] }
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.dev]
+debug = 0
+incremental = false
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true
+
+[[bin]]
+name = "DiskPie"
+path = "src/main.rs"

@@ -1,0 +1,81 @@
+name: Native builds
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: windows-x64
+          - os: ubuntu-22.04
+            artifact: linux-x64
+          - os: macos-15
+            artifact: macos-arm64
+          - os: macos-15-intel
+            artifact: macos-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Linux libraries
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libx11-dev libxi-dev libxcursor-dev libxrandr-dev libxinerama-dev libgl1-mesa-dev libwayland-dev libxkbcommon-dev pkg-config
+      - name: Privacy check
+        run: python scripts/check_repository.py
+      - name: Privacy guard regression tests
+        run: python scripts/test_privacy.py
+      - run: cargo fmt --check
+      - run: cargo test --locked
+      - run: cargo clippy --locked --all-targets -- -D warnings
+      - name: Package Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/package-windows.ps1
+      - name: Build Unix
+        if: runner.os != 'Windows'
+        env:
+          RUSTFLAGS: --remap-path-prefix=${{ github.workspace }}=.
+        run: cargo build --locked --release
+      - name: Package Linux
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p dist
+          python scripts/third_party_notices.py --target x86_64-unknown-linux-gnu --output dist/THIRD_PARTY_NOTICES.txt
+          tar -czf dist/DiskPie-linux-x64.tar.gz -C target/release DiskPie -C ../.. README.md -C dist THIRD_PARTY_NOTICES.txt
+      - name: Package macOS
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p dist/DiskPie.app/Contents/MacOS
+          cp target/release/DiskPie dist/DiskPie.app/Contents/MacOS/DiskPie
+          cat > dist/DiskPie.app/Contents/Info.plist <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+          <key>CFBundleName</key><string>DiskPie</string>
+          <key>CFBundleIdentifier</key><string>app.diskpie.desktop</string>
+          <key>CFBundleExecutable</key><string>DiskPie</string>
+          <key>CFBundlePackageType</key><string>APPL</string>
+          <key>CFBundleVersion</key><string>0.1.0</string>
+          <key>NSHighResolutionCapable</key><true/>
+          </dict></plist>
+          PLIST
+          cp README.md dist/README.md
+          target=$(rustc -vV | sed -n 's/^host: //p')
+          python scripts/third_party_notices.py --target "$target" --output dist/THIRD_PARTY_NOTICES.txt
+          cd dist && zip -r DiskPie-${{ matrix.artifact }}.zip DiskPie.app README.md THIRD_PARTY_NOTICES.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DiskPie-${{ matrix.artifact }}
+          path: |
+            dist/*.zip
+            dist/*.tar.gz
+          retention-days: 7
+          if-no-files-found: error

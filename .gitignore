@@ -1,0 +1,33 @@
+# Default deny: this directory also contains private legacy scan reports.
+/*
+!/.gitignore
+!/Cargo.toml
+!/Cargo.lock
+!/rust-toolchain.toml
+!/README.md
+!/AGENTS.md
+!/DiskPie.cmd
+!/src/
+/src/*
+!/src/*.rs
+!/tests/
+/tests/*
+!/tests/*.rs
+!/scripts/
+/scripts/*
+!/scripts/*.ps1
+!/scripts/*.py
+!/.cargo/
+/.cargo/*
+!/.cargo/config.toml
+!/.github/
+/.github/*
+!/.github/workflows/
+/.github/workflows/*
+!/.github/workflows/build.yml
+!/docs/
+/docs/*
+!/docs/native-design.md
+!/docs/native-plan.md
+!/docs/native-verification.md
+# Never force-add reports, snapshots, logs, captures, or personal fixtures.
